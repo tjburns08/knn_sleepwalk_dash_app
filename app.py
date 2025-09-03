@@ -12,8 +12,8 @@ MAX_K = 50
 
 def load_example():
     # works whether files have an index col or not — we’ll align by order later
-    orig = pd.read_csv("../data/example_surface_markers.csv")
-    dimr = pd.read_csv("../data/example_umap.csv")
+    orig = pd.read_csv("data/example_surface_markers.csv")
+    dimr = pd.read_csv("data/example_umap.csv")
     return orig, dimr
 
 def parse_upload(contents: str, filename: str | None):
