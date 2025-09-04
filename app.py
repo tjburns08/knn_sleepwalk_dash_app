@@ -8,6 +8,10 @@ import base64, io
 from dash.dependencies import ClientsideFunction # for the knn.js script
 
 MAX_K = 50
+# Discrete subsample choices (0 = no subsample)
+SUBSAMPLE_CHOICES = [5_000, 10_000, 20_000, 30_000, 40_000, 50_000, 0]
+DEFAULT_CAP = 20_000  # initial default
+
 
 # ---------------- helpers ----------------
 
@@ -233,11 +237,17 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
         html.Label("k nearest neighbors"),
         dcc.Slider(id="k", min=1, max=50, step=1, value=25, tooltip={"placement":"bottom"}),
 
-        html.Label("max cells (auto-subsample if above)"),
-        dcc.Slider(
+        html.Label("max cells (cap)"),
+            dcc.Slider(
             id="max-cells",
-            min=2000, max=50000, step=1000, value=20000,  # default 20k
-            marks={5000: "5k", 10000: "10k", 20000: "20k", 30000: "30k", 40000: "40k", 50000: "50k"},
+            min=0,
+            max=len(SUBSAMPLE_CHOICES) - 1,
+            step=1,
+            value=SUBSAMPLE_CHOICES.index(DEFAULT_CAP),
+            marks={
+                i: ("full" if v == 0 else f"{v//1000}k")
+                for i, v in enumerate(SUBSAMPLE_CHOICES)
+            },
             tooltip={"placement": "bottom"},
         ),
 
@@ -280,23 +290,24 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
     State("max-cells", "value"),
     prevent_initial_call=True,
 )
-def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells):
+def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells_idx):
     try:
         use_uploads = bool(c_orig and c_dimr)
         if use_uploads:
             df_orig = parse_upload(c_orig, f_orig)
             df_dimr = parse_upload(c_dimr, f_dimr)
 
-           # --- Subsample if dataset is larger than the selected threshold ---
+            # --- Subsample if dataset larger than selected cap ---
             n = len(df_orig)
-            sub_size = int(max_cells or 20000)  # slider default
+            chosen_cap = SUBSAMPLE_CHOICES[int(max_cells_idx or 0)]
             seed = 42
-            if n > sub_size:
+
+            if chosen_cap > 0 and n > chosen_cap:
                 rng = np.random.default_rng(seed)
-                keep = np.sort(rng.choice(n, sub_size, replace=False))
+                keep = np.sort(rng.choice(n, chosen_cap, replace=False))
                 df_orig = df_orig.iloc[keep].reset_index(drop=True)
                 df_dimr = df_dimr.iloc[keep].reset_index(drop=True)
-                subsampled_msg = f"subsampled {n:,}→{sub_size:,}"
+                subsampled_msg = f"subsampled {n:,}→{chosen_cap:,}"
             else:
                 subsampled_msg = f"no subsample (n={n:,})"
 
