@@ -140,7 +140,7 @@ knn_right0 = np.empty((0, 0), dtype=int)
 
 # ---------------- app ----------------
 app = Dash(__name__)
-app.title = "KNN Sleepwalk!"
+app.title = "KNN Sleepwalk"
 server = app.server
 
 app.layout = html.Div(
