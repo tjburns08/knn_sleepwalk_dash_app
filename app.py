@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 import base64, io
+from dash.dependencies import ClientsideFunction # for the knn.js script
 
 MAX_K = 50
 
@@ -147,7 +148,7 @@ app.layout = html.Div(
     [
         html.H1(
             "Welcome to KNN Sleepwalk!",
-            style={"margin":"0 0 12px 0", "techAlign":"center"}
+            style={"margin":"0 0 12px 0", "textAlign":"center"}
         ),
 
         html.Div(
@@ -279,7 +280,7 @@ def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current):
 
             # HACK adding subsampling step
             n = len(df_orig)
-            sub_size = 5000
+            sub_size = 100000
             seed = 42
             if n > sub_size:
                 rng = np.random.default_rng(seed)
@@ -324,7 +325,8 @@ def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current):
                 no_update, f"Run error: {e}", no_update, no_update)
 
 # -------- hover: draw neighbors using current stores --------
-@app.callback(
+app.clientside_callback(
+    ClientsideFunction(namespace="knn", function_name="update_on_hover"),
     Output("plot1", "figure", allow_duplicate=True),
     Output("plot2", "figure", allow_duplicate=True),
     Output("last", "data",   allow_duplicate=True),
@@ -337,46 +339,6 @@ def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current):
     State("xy", "data"),
     prevent_initial_call=True,
 )
-def update_on_hover(hover1, hover2, k, knn_left, knn_right, last, xy):
-    # no data yet
-    if not xy or not xy.get("x"):
-        p1, p2 = clear_patches()
-        return p1, p2, {"idx": None, "k": None}
-
-    trig = ctx.triggered_id
-    if trig == "plot1":
-        idx = hover1["points"][0]["pointIndex"] if hover1 else None
-    elif trig == "plot2":
-        idx = hover2["points"][0]["pointIndex"] if hover2 else None
-    else:
-        idx = last.get("idx")
-
-    xv = np.asarray(xy["x"])
-    yv = np.asarray(xy["y"])
-
-    if idx is None or idx >= len(xv):
-        p1, p2 = clear_patches()
-        return p1, p2, {"idx": None, "k": None}
-
-    k = int(k)
-    # guard in case slider > available after a rerun
-    k_avail = min(len(knn_left[idx]), len(knn_right[idx]))
-    k = min(k, k_avail)
-
-    if last and last.get("idx") == idx and last.get("k") == k:
-        return no_update, no_update, last
-
-    left_center, left_all   = center_and_neighbors(idx, knn_left,  k)
-    right_center, right_all = center_and_neighbors(idx, knn_right, k)
-
-    p1, p2 = Patch(), Patch()
-    p1["data"][1]["x"], p1["data"][1]["y"] = xv[left_all].tolist(),  yv[left_all].tolist()
-    p1["data"][2]["x"], p1["data"][2]["y"] = xv[left_center].tolist(), yv[left_center].tolist()
-
-    p2["data"][1]["x"], p2["data"][1]["y"] = xv[right_all].tolist(),  yv[right_all].tolist()
-    p2["data"][2]["x"], p2["data"][2]["y"] = xv[right_center].tolist(), yv[right_center].tolist()
-
-    return p1, p2, {"idx": idx, "k": k}
 
 # ---------------- main ----------------
 if __name__ == "__main__":
