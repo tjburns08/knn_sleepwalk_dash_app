@@ -10,6 +10,10 @@ This is a UI around my KnnSleepwalk project. This was originally an R package, w
 
 Here, I re-wrote it from scratch so it would be more UI friendly and more easily modifiable on my end, as I build this out.
 
+## Use the web app
+
+For lightweight usage (if datasets are larger than 50k cells, you'll have to subsample down to 50k), you can use the web app. This can be found [here](https://knn-sleepwalk-dash-app.plotly.app/)
+
 ## Installation
 
 Go into the command line, and follow the instructions below.
