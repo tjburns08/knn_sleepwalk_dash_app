@@ -160,7 +160,7 @@ Embeddings can sometimes be misleading. Here, walk through your embedding to see
 
 **How to use:**
 
-1. Upload **Original Markers** CSV (whatever you used to generate the embedding) and **Embedding (UMAP/t-SNE, etc)** CSV (we assume same row count & order). If the dataset is greater than 5000 cells, it will subsample down to 5000. We intend to add larger dataset functionality in later versions.
+1. Upload **Original Markers** CSV (whatever you used to generate the embedding) and **Embedding (UMAP/t-SNE, etc)** CSV (we assume same row count & order). Use "max cells" to automatically downsample large uploads (default 20k). This helps us get around an issue with the web version, where it gets buggy when you upload very large datasets.
 
 2. Click **Run Knn Sleepwalk**. If no files are uploaded, the example dataset loads.
 
@@ -233,6 +233,14 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
         html.Label("k nearest neighbors"),
         dcc.Slider(id="k", min=1, max=50, step=1, value=25, tooltip={"placement":"bottom"}),
 
+        html.Label("max cells (auto-subsample if above)"),
+        dcc.Slider(
+            id="max-cells",
+            min=2000, max=50000, step=1000, value=20000,  # default 20k
+            marks={5000: "5k", 10000: "10k", 20000: "20k", 30000: "30k", 40000: "40k", 50000: "50k"},
+            tooltip={"placement": "bottom"},
+        ),
+
         html.Div(
             [
                 dcc.Graph(
@@ -269,27 +277,31 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
     State("upload-orig", "filename"),
     State("upload-dimr", "filename"),
     State("k", "value"),
+    State("max-cells", "value"),
     prevent_initial_call=True,
 )
-def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current):
+def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells):
     try:
         use_uploads = bool(c_orig and c_dimr)
         if use_uploads:
             df_orig = parse_upload(c_orig, f_orig)
             df_dimr = parse_upload(c_dimr, f_dimr)
 
-            # HACK adding subsampling step
+           # --- Subsample if dataset is larger than the selected threshold ---
             n = len(df_orig)
-            sub_size = 100000
+            sub_size = int(max_cells or 20000)  # slider default
             seed = 42
             if n > sub_size:
                 rng = np.random.default_rng(seed)
-                keep = np.sort(rng.choice(n, sub_size, replace = False))
-                df_orig = df_orig.iloc[keep].reset_index(drop = True)
-                df_dimr = df_dimr.iloc[keep].reset_index(drop = True)
+                keep = np.sort(rng.choice(n, sub_size, replace=False))
+                df_orig = df_orig.iloc[keep].reset_index(drop=True)
+                df_dimr = df_dimr.iloc[keep].reset_index(drop=True)
+                subsampled_msg = f"subsampled {n:,}→{sub_size:,}"
+            else:
+                subsampled_msg = f"no subsample (n={n:,})"
 
             orig, dimr, x, y = prepare_aligned_ordered(df_orig, df_dimr)
-            source_msg = f"using uploads ({f_orig} + {f_dimr})"
+            source_msg = f"using uploads ({f_orig} + {f_dimr}; {subsampled_msg})"
         else:
             orig_ex, dimr_ex = load_example()
             orig, dimr, x, y = prepare_aligned_ordered(orig_ex, dimr_ex)
