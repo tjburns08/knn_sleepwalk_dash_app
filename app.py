@@ -192,6 +192,11 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
         dcc.Store(id="knn-left", data=knn_left0.tolist()),
         dcc.Store(id="knn-right", data=knn_right0.tolist()),
 
+        # For the subsampling on the browser functionality
+        dcc.Store(id="subset-orig-csv"),   # CSV *string* after client-side subsetting
+        dcc.Store(id="subset-dimr-csv"),   # CSV *string* after client-side subsetting
+        dcc.Store(id="subset-meta"),       # {"n_in":..., "n_out":..., "cap":..., "method":"uniform"}
+
         html.Div(
             [
                 html.Div(
@@ -282,38 +287,30 @@ Visit my website [here](https://tjburns08.github.io/) where I write, research, a
     Output("k", "max"),
     Output("k", "value"),
     Input("run-btn", "n_clicks"),
-    State("upload-orig", "contents"),
-    State("upload-dimr", "contents"),
+    State("subset-orig-csv", "data"),   # NEW: small CSV from browser
+    State("subset-dimr-csv", "data"),   # NEW
+    State("subset-meta", "data"),       # NEW
     State("upload-orig", "filename"),
     State("upload-dimr", "filename"),
     State("k", "value"),
-    State("max-cells", "value"),
     prevent_initial_call=True,
 )
-def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells_idx):
+def on_run(n_clicks, subset_orig_csv, subset_dimr_csv, subset_meta, f_orig, f_dimr, k_current):
     try:
-        use_uploads = bool(c_orig and c_dimr)
-        if use_uploads:
-            df_orig = parse_upload(c_orig, f_orig)
-            df_dimr = parse_upload(c_dimr, f_dimr)
-
-            # --- Subsample if dataset larger than selected cap ---
-            n = len(df_orig)
-            chosen_cap = SUBSAMPLE_CHOICES[int(max_cells_idx or 0)]
-            seed = 42
-
-            if chosen_cap > 0 and n > chosen_cap:
-                rng = np.random.default_rng(seed)
-                keep = np.sort(rng.choice(n, chosen_cap, replace=False))
-                df_orig = df_orig.iloc[keep].reset_index(drop=True)
-                df_dimr = df_dimr.iloc[keep].reset_index(drop=True)
-                subsampled_msg = f"subsampled {n:,}→{chosen_cap:,}"
-            else:
-                subsampled_msg = f"no subsample (n={n:,})"
-
+        if subset_orig_csv and subset_dimr_csv:
+            # read subsampled CSVs
+            df_orig = pd.read_csv(io.StringIO(subset_orig_csv))
+            df_dimr = pd.read_csv(io.StringIO(subset_dimr_csv))
             orig, dimr, x, y = prepare_aligned_ordered(df_orig, df_dimr)
-            source_msg = f"using uploads ({f_orig} + {f_dimr}; {subsampled_msg})"
+            if subset_meta and "n_in" in subset_meta:
+                sub_msg = ( "no subsample"
+                            if subset_meta["n_in"] == subset_meta["n_out"]
+                            else f"subsampled {subset_meta['n_in']:,}→{subset_meta['n_out']:,}" )
+            else:
+                sub_msg = "subsampled (client-side)"
+            source_msg = f"using uploads ({f_orig} + {f_dimr}; {sub_msg})"
         else:
+            # fall back to example data
             orig_ex, dimr_ex = load_example()
             orig, dimr, x, y = prepare_aligned_ordered(orig_ex, dimr_ex)
             source_msg = "using built-in example"
@@ -321,7 +318,6 @@ def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells_idx):
         dimr_xy = dimr.iloc[:, :2].values
         knn_left, knn_right, kmax = compute_knn(orig, dimr_xy)
 
-        # replace clouds & clear overlays; autorange
         p1, p2 = Patch(), Patch()
         for p in (p1, p2):
             p["data"][0]["x"], p["data"][0]["y"] = x.tolist(), y.tolist()
@@ -331,21 +327,26 @@ def on_run(n_clicks, c_orig, c_dimr, f_orig, f_dimr, k_current, max_cells_idx):
             p["layout"]["yaxis"]["autorange"] = True
 
         k_new = min(int(k_current or 8), kmax)
-        status = f"Loaded {orig.shape[0]} rows; k ∈ [1,{kmax}] — {source_msg}"
+        status = f"Loaded {orig.shape[0]:,} rows; k ∈ [1,{kmax}] — {source_msg}"
 
-        return (
-            knn_left.tolist(),
-            knn_right.tolist(),
-            {"x": x.tolist(), "y": y.tolist()},
-            p1, p2,
-            {"idx": None, "k": None},
-            status,
-            kmax,
-            k_new,
-        )
+        return ( knn_left.tolist(), knn_right.tolist(),
+                 {"x": x.tolist(), "y": y.tolist()},
+                 p1, p2, {"idx": None, "k": None},
+                 status, kmax, k_new )
     except Exception as e:
         return (no_update, no_update, no_update, no_update, no_update,
                 no_update, f"Run error: {e}", no_update, no_update)
+
+# -------- subsampling on the browser ------------------------
+app.clientside_callback(
+    ClientsideFunction(namespace="subsample", function_name="prepare"),
+    Output("subset-orig-csv", "data"),
+    Output("subset-dimr-csv", "data"),
+    Output("subset-meta", "data"),
+    Input("upload-orig", "contents"),
+    Input("upload-dimr", "contents"),
+    Input("max-cells", "value"),
+)
 
 # -------- hover: draw neighbors using current stores --------
 app.clientside_callback(
@@ -365,4 +366,4 @@ app.clientside_callback(
 
 # ---------------- main ----------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)
