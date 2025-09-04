@@ -38,7 +38,7 @@ Then, open the printed URL (e.g., http://127.0.0.1:8050)
 
 When you click on the printed URL, a UI interface will pop up. At the top are the instructions. But I'll repeat them here:
 
-1. Upload **Original Markers** CSV (whatever you used to generate the embedding) and **Embedding (UMAP/t-SNE, etc)** CSV (we assume same row count & order). If the dataset is greater than 5000 cells, it will subsample down to 5000. We intend to add larger dataset functionality in later versions.
+1. Upload **Original Markers** CSV (whatever you used to generate the embedding) and **Embedding (UMAP/t-SNE, etc)** CSV (we assume same row count & order). Use "max cells" to automatically downsample large uploads (default 20k). This helps us get around an issue with the web version, where it gets buggy when you upload very large datasets.
 
 2. Click **Run Knn Sleepwalk**. If no files are uploaded, the example dataset loads.
 
